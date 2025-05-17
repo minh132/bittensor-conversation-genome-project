@@ -20,7 +20,10 @@ import os
 import hashlib
 import typing
 import sys
-
+import httpx
+import json
+from dotenv import load_dotenv
+load_dotenv()
 
 # Bittensor
 import bittensor as bt
@@ -65,14 +68,25 @@ class Miner(BaseMinerNeuron):
         lines = Utils.get(window, "lines")
 
         bt.logging.info(f"Miner received window {window_idx} with {len(lines)} conversation lines")
+        convo = {"lines":lines}
+        start_time = time.time()
+        endpoint_inference = os.getenv("ENDPOINT")
+        (xml, participants) = Utils.generate_convo_xml(convo)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout=20)) as client:
+            response = await client.post(endpoint_inference, json={"prompt":xml})
+            response = response.json()
 
-        ml = MinerLib()
-        result = await ml.do_mining(conversation_guid, window_idx, lines, 17)
+        end_time = time.time()
+        print(f"Time taken: {end_time - start_time} seconds")
 
-        if not Utils.empty(log_path):
-            Utils.append_log(log_path, f"Mined vectors and tags: {result['tags']}")
+        synapse.cgp_output = [response]
+        # ml = MinerLib()
+        # result = await ml.do_mining(conversation_guid, window_idx, lines, 17)
 
-        synapse.cgp_output = [result]
+        # if not Utils.empty(log_path):
+        #     Utils.append_log(log_path, f"Mined vectors and tags: {result['tags']}")
+
+
         return synapse
 
     async def blacklist(
